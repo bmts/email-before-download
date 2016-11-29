@@ -104,8 +104,15 @@ if (! $wpdb->get_row ( "SHOW COLUMNS
   FROM $table_posted_data
   LIKE 'email'" ))
 	$wpdb->query ( "ALTER TABLE `$table_posted_data` ADD `email` VARCHAR(128) NULL DEFAULT NULL;" );
-	
-	// Shortcode function
+function update_keypair($arr, $key, $val) {
+	if (empty ( $arr [$key] ))
+		$arr [$key] = array (
+				$val 
+		);
+	else
+		$arr [$key] [] = $val;
+}
+// Shortcode function
 function emailreqtag_func($atts) {
 	extract ( shortcode_atts ( array (
 			'download_id' => NULL,
@@ -121,8 +128,7 @@ function emailreqtag_func($atts) {
 			'checked' => NULL,
 			'hidden_form' => NULL,
 			'use_radio' => NULL 
-	)
-	, $atts ) );
+	), $atts ) );
 	
 	global $wpdb, $wp_dlm_root, $wp_dlm_db, $wp_dlm_db_taxonomies, $def_format, $dlm_url, $downloadurl, $downloadtype, $wp_dlm_db_meta;
 	
@@ -134,6 +140,7 @@ function emailreqtag_func($atts) {
 	$url = '';
 	$hf = '';
 	$dldArray = array ();
+	$categories = array ();
 	$table_item = $wpdb->prefix . "ebd_item";
 	$is_new_dm = false;
 	if ($download_id != NULL) {
@@ -163,6 +170,9 @@ function emailreqtag_func($atts) {
 				
 				$d->title = do_shortcode ( '[download_data id="' . $dl_id . '" data="title"]' );
 			}
+			
+			$d->categories = get_the_terms ( $dl_id, "dlm_download_category" );
+			
 			$checked_state_html = 'checked="true"';
 			$checked_state = get_option ( 'email_before_download_chekboxes_state' );
 			if ($checked != NULL) {
@@ -188,10 +198,30 @@ function emailreqtag_func($atts) {
 				if ($title == NULL || $title == '')
 					$title_tmp .= $d->title . '|';
 				
-				$chekboxes .= '<br />' . $d->title . ' <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/>';
-				$chekboxesL .= '<br /> <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/> ' . $d->title;
+				$chekboxeR = '<li>' . $d->title . ' <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/></li>';
+				$chekboxeL = '<li> <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/> ' . $d->title . "</li>";
+				foreach ( $d->categories as $item ) {
+					update_keypair ( $categories, $item->name, array (
+							"R" => $chekboxeR,
+							"L" => $chekboxeL 
+					) );
+				}
 			}
 		}
+		$chekboxes = "<ul>";
+		$chekboxesL = "<ul>";
+		foreach ( $categories as $key => $values ) {
+			$chekboxes .= "<li>" . $key . "<ul>";
+			$chekboxesL .= "<li>" . $key . "<ul>";
+			foreach ( $values as $value ) {
+				$chekboxes .= $value ["R"];
+				$chekboxesL .= $value ["L"];
+			}
+			$chekboxes .= "</ul></li>";
+			$chekboxes .= "</ul></li>";
+		}
+		$chekboxes .= "</ul>";
+		$chekboxesL .= "</ul>";
 		if (count ( $title_tmp ) > 0)
 			$title = rtrim ( $title_tmp, '|' );
 		
@@ -564,8 +594,8 @@ function ebd_process_email_form($cf7) {
 					$attachments [] = $attachment;
 				}
 			}
-		} 		// single download for the download monitor file or file lnk
-		else if (! empty ( $d ) || ! empty ( $ebd_item->file )) {
+		}  // single download for the download monitor file or file lnk
+else if (! empty ( $d ) || ! empty ( $ebd_item->file )) {
 			// generate unique id for the file (link)
 			$uid = md5 ( uniqid ( rand (), true ) );
 			
@@ -595,8 +625,8 @@ function ebd_process_email_form($cf7) {
 				$url = WP_PLUGIN_URL . "/email-before-download/download.php?dl=" . $uid;
 				$innerHtml = '<a class="icon-button download-icon" target="' . $target . '" href="' . $url . '">' . addslashes ( $title ) . '</span></span></a><br />';
 			}
-		} 		// nothing is selected for the download
-		else {
+		}  // nothing is selected for the download
+else {
 			// we don't sent an email and throw an error
 			$cf7->skip_mail = true;
 			// this message doesn't seem to appear but we leave it for now
@@ -856,9 +886,8 @@ function email_before_download_options() {
 		target="_blank">Click to export the Email Before Download log as a
 		.CSV file</a><br /> <br /> <a href="#" target="_blank"
 		onclick="clearLog();return false;">Click to clear Email Before
-		Download log</a><br />
-	<em>Note: This will permanently delete all Email Before Download log
-		entries from the database.</em><br />
+		Download log</a><br /> <em>Note: This will permanently delete all
+		Email Before Download log entries from the database.</em><br />
 	<script type="text/javascript">
 function clearLog(){
 	var answer = confirm ("Are you sure you want to clear the log?")
@@ -1034,8 +1063,7 @@ function clearLog(){
 						<input type="text" size="40"
 							name="email_before_download_html_after_link"
 							value="<?php echo get_option('email_before_download_html_after_link'); ?>" />
-						<br />
-						<font size="-1"><i>HTML you want to be added after the link</i></font>
+						<br /> <font size="-1"><i>HTML you want to be added after the link</i></font>
 					</p>
 				</td>
 			</tr>
@@ -1051,13 +1079,12 @@ function clearLog(){
 					<i>You can use the following placeholders: [requesting_name],
 						[file_url] and [file_name]. </i><br /> <i>So if you, for example,
 						don't provide the [file_url] placeholder, the <br />user will not
-						receive any link. Here is an example of the template:<br />
-					<br /> <b> Hello [requesting_name], <br /> Here is the download for
-							&lt;a href="[file_url]"&gt;[file_name]&lt;/a&gt; that you
-							requested.<br /> Sincerely,<br /> My Company name
-					</b> <br />
-					<br /> Note. If you leave this field empty, an email containing
-						only the file URL will be sent.
+						receive any link. Here is an example of the template:<br /> <br />
+						<b> Hello [requesting_name], <br /> Here is the download for &lt;a
+							href="[file_url]"&gt;[file_name]&lt;/a&gt; that you requested.<br />
+							Sincerely,<br /> My Company name
+					</b> <br /> <br /> Note. If you leave this field empty, an email
+						containing only the file URL will be sent.
 
 				</i> <br /></td>
 			</tr>
@@ -1187,6 +1214,5 @@ with your PayPal confirmation number and we will get started.
 </form>
 
 <?php
-
 }
 ?>
