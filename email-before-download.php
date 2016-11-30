@@ -141,6 +141,8 @@ function emailreqtag_func($atts) {
 	$hf = '';
 	$dldArray = array ();
 	$categories = array ();
+	$debug = array ();
+	$categories ["Others"] = array ();
 	$table_item = $wpdb->prefix . "ebd_item";
 	$is_new_dm = false;
 	if ($download_id != NULL) {
@@ -172,6 +174,9 @@ function emailreqtag_func($atts) {
 			}
 			
 			$d->categories = get_the_terms ( $dl_id, "dlm_download_category" );
+			$debug [] = array (
+					$dl_id => $d->categories 
+			);
 			
 			$checked_state_html = 'checked="true"';
 			$checked_state = get_option ( 'email_before_download_chekboxes_state' );
@@ -197,31 +202,47 @@ function emailreqtag_func($atts) {
 				// $date = date("jS M Y", strtotime($d->date));
 				if ($title == NULL || $title == '')
 					$title_tmp .= $d->title . '|';
-				
-				$chekboxeR = '<li>' . $d->title . ' <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/></li>';
-				$chekboxeL = '<li> <input type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/> ' . $d->title . "</li>";
-				foreach ( $d->categories as $item ) {
-					update_keypair ( $categories, $item->name, array (
-							"R" => $chekboxeR,
-							"L" => $chekboxeL 
-					) );
+				$dl_idt = trim ( $dl_id );
+				$chekboxeR = '<li onclick="document.getElementById(\'chk_' . $dl_idt . '\').checked = !document.getElementById(\'chk_' . $dl_idt . '\').checked">' . $d->title . ' <input id="chk_' . $dl_idt . '" type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/></li>';
+				$chekboxeL = '<li onclick="document.getElementById(\'chk_' . $dl_idt . '\').checked = !document.getElementById(\'chk_' . $dl_idt . '\').checked"> <input id="chk_' . $dl_idt . '" type="' . $checkbox . '" ' . $checked_state_html . ' name="ebd_downloads[]" value="' . $dl_id . '"/> ' . $d->title . "</li>";
+				$aux = array (
+						"R" => $chekboxeR,
+						"L" => $chekboxeL 
+				);
+				if (is_array ( $d->categories )) {
+					foreach ( $d->categories as $item ) {
+						if (! isset ( $categories [$item->name] )) {
+							$categories [$item->name] = array (
+									$aux 
+							);
+							continue;
+						} 
+						if (is_array ( $categories [$item->name] )) {
+							$categories [$item->name] [] = $aux;
+						}
+					}
+				} else {
+					$categories ["Others"] [] = $aux;
 				}
 			}
 		}
-		$chekboxes = "<ul>";
-		$chekboxesL = "<ul>";
+		ksort($categories);
+		$chekboxes = "<!--" . json_encode ( $debug, JSON_PRETTY_PRINT ) . "--><ul>";
+		$chekboxesL = "<!--" . json_encode ( $debug, JSON_PRETTY_PRINT ) . "--><ul>";
 		foreach ( $categories as $key => $values ) {
-			$chekboxes .= "<li>" . $key . "<ul>";
-			$chekboxesL .= "<li>" . $key . "<ul>";
+			if (empty($values)) continue;
+			$chekboxes .= "<li class=\"ebd_downloadCateory\">" . $key . "<ul class=\"ebd_downloadItem\">";
+			$chekboxesL .= "<li class=\"ebd_downloadCateory\">" . $key . "<ul class=\"ebd_downloadItem\">";
 			foreach ( $values as $value ) {
 				$chekboxes .= $value ["R"];
 				$chekboxesL .= $value ["L"];
 			}
 			$chekboxes .= "</ul></li>";
-			$chekboxes .= "</ul></li>";
+			$chekboxesL .= "</ul></li>";
 		}
 		$chekboxes .= "</ul>";
 		$chekboxesL .= "</ul>";
+		
 		if (count ( $title_tmp ) > 0)
 			$title = rtrim ( $title_tmp, '|' );
 		
